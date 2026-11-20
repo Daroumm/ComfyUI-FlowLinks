@@ -1,0 +1,7 @@
+# 不进发布包的开发/推广文件（语法同 .gitignore）
+promo/
+docs/frames/
+docs/*-raw.jpg
+docs/demo-verify-on.jpg
+flowlinks-demo-cyberpunk.json
+__pycache__/

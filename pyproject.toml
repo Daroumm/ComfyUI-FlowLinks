@@ -1,0 +1,18 @@
+[project]
+name = "comfyui-flowlinks"
+description = "Animated water-pipe workflow links and per-type neon node glow for ComfyUI. Flow speed follows live execution progress."
+version = "0.1.0-beta.1"
+license = { text = "MIT" }
+requires-python = ">=3.9"
+authors = [{ name = "darou" }]
+keywords = ["comfyui", "frontend", "links", "animation", "ui", "visualization"]
+
+[project.urls]
+Repository = "https://github.com/Daroumm/ComfyUI-FlowLinks"
+Issues = "https://github.com/Daroumm/ComfyUI-FlowLinks/issues"
+
+[tool.comfy]
+PublisherId = ""
+DisplayName = "FlowLinks — Animated Workflow Links"
+Icon = "https://raw.githubusercontent.com/Daroumm/ComfyUI-FlowLinks/main/icon.png"
+Banner = "https://raw.githubusercontent.com/Daroumm/ComfyUI-FlowLinks/main/banner.png"
