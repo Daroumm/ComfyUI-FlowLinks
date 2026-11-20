@@ -1,5 +1,7 @@
 # ComfyUI-FlowLinks
 
+**[English](README.md) | [简体中文](README.zh-CN.md)**
+
 > *A touch of living color for a static interface.*
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
@@ -15,8 +17,6 @@ the workflow.
 ![FlowLinks demo](docs/demo.gif)
 
 ![FlowLinks on a standard SDXL text-to-image workflow](docs/screenshot-main.png)
-
-> 中文说明见 [README.zh-CN.md](README.zh-CN.md)。
 
 ## Features
 
