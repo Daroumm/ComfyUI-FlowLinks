@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Error feedback is now unmissable (2026-11-21): the failed node's glow frame
+  hard-blinks in red with a thicker border, and its connected links freeze
+  completely (flow stops, red) instead of merely turning red while still
+  flowing. Fresh-install test passed on macOS (ComfyUI 0.45.3): clean install
+  from the release files, renamed folder, restart, execution follow verified
+  with frame captures.
+
 ### Planned
 
 - Task progress woven into the flow: node progress brightens its outgoing

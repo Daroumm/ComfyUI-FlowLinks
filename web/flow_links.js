@@ -181,12 +181,17 @@ function flowAnimation(ctx, path, linkData, renderCtx) {
   const t = nowSec();
   const dt = Math.min(0.1, Math.max(0, t - st.last));
   st.last = t;
-  const target = targetSpeedFor(st);
-  st.speed += (target - st.speed) * Math.min(1, dt * 3);
-  st.phase = (st.phase + dt * st.speed) % 1;
+  const errored = isErrorLink(st);
+  if (errored) {
+    // Error link: freeze the stream dead (no phase advance, speed pinned to 0).
+    st.speed = 0;
+  } else {
+    const target = targetSpeedFor(st);
+    st.speed += (target - st.speed) * Math.min(1, dt * 3);
+    st.phase = (st.phase + dt * st.speed) % 1;
+  }
 
   const active = isActiveLink(st);
-  const errored = isErrorLink(st);
   let color = "#38bdf8";
   try {
     color = this.determineLinkColor(linkData, renderCtx, false) || color;
@@ -403,6 +408,9 @@ function drawOverlayGlow() {
     const id = String(node.id);
     const isExec = executingNodeId != null && id === String(executingNodeId);
     const isDone = doneNodes.has(id);
+    const isErr = !!errorNodeId && id === errorNodeId;
+    // Error node: hard blink (frame flashes on/off) so it can't be missed.
+    const blink = isErr ? (Math.sin(t * 8) > 0 ? 1 : 0.08) : 1;
     const color = nodeColorFor(app.canvas, node);
     const collapsed = !!node.flags?.collapsed;
     const gx = node.pos[0];
@@ -424,11 +432,11 @@ function drawOverlayGlow() {
       roundRectPath(ctx, sx, sy, sw, titleH * scale, 8 * scale, true);
       ctx.fill();
     }
-    ctx.globalAlpha = isDone && !isExec ? 0.45 : 0.95;
+    ctx.globalAlpha = (isDone && !isExec ? 0.45 : 0.95) * blink;
     ctx.strokeStyle = color;
-    ctx.lineWidth = (isExec ? 5.0 : 3.6) * Math.max(0.6, scale);
+    ctx.lineWidth = (isExec ? 5.0 : isErr ? 5.0 : 3.6) * Math.max(0.6, scale);
     ctx.shadowColor = color;
-    ctx.shadowBlur = (isExec ? 26 : 14) * pulse * Math.max(0.6, scale);
+    ctx.shadowBlur = (isExec ? 26 : isErr ? 26 : 14) * pulse * blink * Math.max(0.6, scale);
     roundRectPath(ctx, sx - 3, sy - 3, sw + 6, sh + 6, 10 * scale);
     ctx.stroke();
     ctx.restore();
@@ -448,8 +456,11 @@ function drawNodeGlow(canvas, node, ctx) {
   const id = String(node.id);
   const isExec = executingNodeId != null && id === String(executingNodeId);
   const isDone = doneNodes.has(id);
+  const isErr = !!errorNodeId && id === errorNodeId;
   const t = nowSec();
   const pulse = isExec && cfg.nodePulse ? 0.65 + 0.35 * Math.sin(t * 5) : 1;
+  // Error node: hard blink (frame flashes on/off) so it can't be missed.
+  const blink = isErr ? (Math.sin(t * 8) > 0 ? 1 : 0.08) : 1;
   ctx.save();
   if (cfg.titleGradient && !collapsed) {
     const g = ctx.createLinearGradient(x, 0, x + w, 0);
@@ -460,11 +471,11 @@ function drawNodeGlow(canvas, node, ctx) {
     roundRectPath(ctx, x, y, w, titleH, 8, true);
     ctx.fill();
   }
-  ctx.globalAlpha = isDone && !isExec ? 0.4 : 0.95;
+  ctx.globalAlpha = (isDone && !isExec ? 0.4 : 0.95) * blink;
   ctx.strokeStyle = color;
-  ctx.lineWidth = isExec ? 5.0 : 3.6;
+  ctx.lineWidth = isExec ? 5.0 : isErr ? 5.0 : 3.6;
   ctx.shadowColor = color;
-  ctx.shadowBlur = (isExec ? 26 : 14) * pulse;
+  ctx.shadowBlur = (isExec ? 26 : isErr ? 26 : 14) * pulse * blink;
   roundRectPath(ctx, x - 3, y - 3, w + 6, hh + 6, 10);
   ctx.stroke();
   ctx.restore();
