@@ -30,6 +30,7 @@ const cfg = Object.assign(
     nodeGlow: true,
     nodePulse: true,
     titleGradient: true,
+    taskBadge: true,
   },
   (() => {
     try {
@@ -54,6 +55,12 @@ let progressRate = 0; // smoothed steps/s of the executing node
 let lastProgress = { node: null, value: 0, time: 0 };
 const doneNodes = new Set(); // nodes finished in the current run
 const linkState = new Map(); // linkId -> {phase, last, speed, origin, target}
+const nodeProgress = new Map(); // 节点 id -> 当前节点进度（0~1）
+let queuedCount = null; // /queue 的 running + pending 数量，取不到为 null
+let lastQueuePoll = 0;
+let queueInflight = false;
+let taskBadgeEl = null;
+let taskBadgeLocale = "en";
 
 function nowSec() {
   return performance.now() / 1000;
@@ -65,9 +72,17 @@ function clamp(v, lo, hi) {
 
 api.addEventListener("execution_start", () => {
   doneNodes.clear();
+  nodeProgress.clear(); // 新任务开始，清掉上一轮节点进度
   errorNodeId = null;
   progressRate = 0;
+  queuedCount = null;
+  lastQueuePoll = nowSec();
   lastProgress = { node: null, value: 0, time: 0 };
+  try {
+    void refreshQueuedCount();
+  } catch (e) {
+    /* 队列查询失败不影响流水主逻辑 */
+  }
 });
 api.addEventListener("executing", (e) => {
   const d = e.detail;
@@ -76,25 +91,53 @@ api.addEventListener("executing", (e) => {
     d && typeof d === "object" ? (d.node ?? d.display_node ?? null) : (d ?? null);
   if (executingNodeId && String(executingNodeId) !== String(next)) {
     doneNodes.add(String(executingNodeId));
+    nodeProgress.delete(String(executingNodeId)); // 切到下一节点，清掉旧节点进度
   }
   executingNodeId = next;
   if (!executingNodeId) {
     progressRate = 0;
+    nodeProgress.clear(); // 空闲时不能残留进度亮度
     lastProgress = { node: null, value: 0, time: 0 };
+  }
+  try {
+    lastQueuePoll = nowSec();
+    void refreshQueuedCount();
+    updateTaskBadge();
+  } catch (e) {
+    /* 角标或队列异常不影响执行事件 */
   }
 });
 api.addEventListener("execution_success", () => {
   executingNodeId = null;
   progressRate = 0;
+  nodeProgress.clear();
+  try {
+    updateTaskBadge();
+    void refreshQueuedCount();
+  } catch (e) {
+    /* ignore */
+  }
 });
 api.addEventListener("execution_error", (e) => {
   errorNodeId = String(e.detail?.node_id ?? executingNodeId ?? "");
   executingNodeId = null;
   progressRate = 0;
+  nodeProgress.clear();
+  try {
+    updateTaskBadge();
+  } catch (e) {
+    /* ignore */
+  }
 });
 api.addEventListener("execution_interrupted", () => {
   executingNodeId = null;
   progressRate = 0;
+  nodeProgress.clear();
+  try {
+    updateTaskBadge();
+  } catch (e) {
+    /* ignore */
+  }
 });
 api.addEventListener("progress", (e) => {
   const d = e.detail || {};
@@ -106,6 +149,20 @@ api.addEventListener("progress", (e) => {
     }
   }
   lastProgress = { node: d.node, value: d.value || 0, time: t };
+
+  // 记录节点进度，供出线增亮和任务角标使用
+  try {
+    if (d.node != null && typeof d.max === "number" && d.max > 0) {
+      nodeProgress.set(String(d.node), clamp((d.value || 0) / d.max, 0, 1));
+    }
+  } catch (e) {
+    /* 进度异常时保留上一次有效值 */
+  }
+  try {
+    updateTaskBadge();
+  } catch (e) {
+    /* 角标异常不影响流水 */
+  }
 });
 // Fallback for newer frontends: progress_state = {nodes: {id: {value, max, state}}}
 api.addEventListener("progress_state", (e) => {
@@ -122,10 +179,106 @@ api.addEventListener("progress_state", (e) => {
       }
       lastProgress = { node: id, value: n.value, time: t };
       if (!executingNodeId) executingNodeId = id;
+
+      // 记录 progress_state 提供的节点进度
+      try {
+        if (typeof n.max === "number" && n.max > 0) {
+          nodeProgress.set(String(id), clamp(n.value / n.max, 0, 1));
+        }
+      } catch (e) {
+        /* 进度异常时保留上一次有效值 */
+      }
     }
-    if (n?.state === "finished") doneNodes.add(String(id));
+    if (n?.state === "finished") {
+      doneNodes.add(String(id));
+      nodeProgress.delete(String(id)); // 节点完成，清掉进度
+    }
+  }
+  try {
+    updateTaskBadge();
+  } catch (e) {
+    /* 角标异常不影响流水 */
   }
 });
+
+// 总进度取当前执行节点的进度；没有执行节点时为 0
+function getOverallPct() {
+  try {
+    if (executingNodeId == null) return 0;
+    return clamp(Number(nodeProgress.get(String(executingNodeId))) || 0, 0, 1);
+  } catch (e) {
+    return 0;
+  }
+}
+
+// 查询 ComfyUI 队列：queue_running + queue_pending；失败时退化为 null
+async function refreshQueuedCount() {
+  if (queueInflight) return;
+  queueInflight = true;
+  try {
+    let resp = null;
+    if (api && typeof api.getQueue === "function") {
+      resp = await api.getQueue();
+    } else if (api && typeof api.fetchApi === "function") {
+      resp = await api.fetchApi("/queue");
+    } else {
+      resp = await fetch("/queue");
+    }
+
+    let data = resp;
+    // 有些前端版本里 api.getQueue() 返回 Response，需要主动 json()
+    if (resp && typeof resp.json === "function") {
+      data = await resp.json();
+    }
+
+    const running = Array.isArray(data?.queue_running)
+      ? data.queue_running.length
+      : 0;
+    const pending = Array.isArray(data?.queue_pending)
+      ? data.queue_pending.length
+      : 0;
+    queuedCount = running + pending;
+  } catch (e) {
+    queuedCount = null; // 接口取不到时，角标只显示百分比
+  } finally {
+    queueInflight = false;
+    try {
+      updateTaskBadge();
+    } catch (e) {
+      /* ignore */
+    }
+  }
+}
+
+// 刷新右下角任务角标；空闲或开关关闭时隐藏
+function updateTaskBadge() {
+  try {
+    if (!taskBadgeEl) return;
+    if (!cfg.taskBadge || executingNodeId == null) {
+      taskBadgeEl.style.display = "none";
+      return;
+    }
+
+    const loc = taskBadgeLocale === "zh" ? "zh" : "en";
+    const strings = STRINGS[loc];
+    const pct = clamp(Math.round(getOverallPct() * 100), 0, 100);
+
+    if (queuedCount == null) {
+      taskBadgeEl.textContent = strings.taskProgress.replace("{pct}", pct);
+    } else {
+      taskBadgeEl.textContent = strings.taskQueued
+        .replace("{pct}", pct)
+        .replace("{n}", queuedCount);
+    }
+    taskBadgeEl.style.display = "inline-flex";
+  } catch (e) {
+    try {
+      if (taskBadgeEl) taskBadgeEl.style.display = "none";
+    } catch (inner) {
+      /* ignore */
+    }
+  }
+}
 
 function isActiveLink(st) {
   if (!executingNodeId) return false;
@@ -150,6 +303,8 @@ function targetSpeedFor(st) {
   } else if (isActiveLink(st)) {
     const factor = progressRate > 0 ? clamp(progressRate / 2, 0.6, 3) : 1.4;
     s = 0.9 * factor; // active link: follows generation speed
+    // v3：总进度越高，整条活跃链路越快；100% 时为 1.5 倍
+    s *= 1 + getOverallPct() * 0.5;
   } else if (doneNodes.has(String(st.origin))) {
     s = 0.05; // delivered: ease to a stop
   } else {
@@ -208,26 +363,47 @@ function flowAnimation(ctx, path, linkData, renderCtx) {
   const offset = -st.phase * period * 6;
   const pulse = errored ? 0.55 + 0.35 * Math.sin(t * 6) : 1;
 
+  // 总进度用于加强所有活跃连线的辉光
+  const overallPct = errored ? 0 : getOverallPct();
+  // 节点自身进度只增强从当前执行节点“出去”的连线，入线不增强
+  const originPct =
+    !errored &&
+    active &&
+    st.origin != null &&
+    String(st.origin) === String(executingNodeId)
+      ? clamp(Number(nodeProgress.get(String(st.origin))) || 0, 0, 1)
+      : 0;
+
+  // pct=0 时与旧版一致；pct=1 时主水流 alpha 接近 1，出线辉光增强约 50%
+  const wallAlpha = active ? 0.3 + 0.15 * originPct : 0.16;
+  const waterAlpha = active ? 0.95 + 0.05 * originPct : 0.5;
+  const highlightAlpha = active ? 0.55 + 0.35 * originPct : 0.25;
+
+  // 总进度再给活跃辉光一个适度增强；关闭辉光时固定为 0
+  const glowFactor = cfg.glow ? 1 + overallPct * 0.2 + originPct * 0.5 : 0;
+  const wallGlow = active ? 10 * glowFactor : 5 * glowFactor;
+  const waterGlow = active ? 8 * glowFactor : 4 * glowFactor;
+
   ctx.save();
   ctx.lineCap = "round";
   ctx.lineJoin = "round";
   // 1) Pipe wall: wide translucent stroke.
-  ctx.globalAlpha = (active ? 0.3 : 0.16) * pulse;
+  ctx.globalAlpha = wallAlpha * pulse;
   ctx.strokeStyle = color;
   ctx.lineWidth = baseW + cfg.pipeWidth;
   ctx.shadowColor = color;
-  ctx.shadowBlur = cfg.glow ? (active ? 10 : 5) : 0;
+  ctx.shadowBlur = wallGlow;
   ctx.stroke(path);
   // 2) Water: bright dashed segments moving forward.
-  ctx.globalAlpha = (active ? 0.95 : 0.5) * pulse;
+  ctx.globalAlpha = waterAlpha * pulse;
   ctx.lineWidth = Math.max(2, baseW + 1);
-  ctx.shadowBlur = cfg.glow ? (active ? 8 : 4) : 0;
+  ctx.shadowBlur = waterGlow;
   ctx.setLineDash([dashLen, gapLen]);
   ctx.lineDashOffset = offset;
   ctx.strokeStyle = color;
   ctx.stroke(path);
   // 3) Highlight: thinner white dashes on top.
-  ctx.globalAlpha = (active ? 0.55 : 0.25) * pulse;
+  ctx.globalAlpha = highlightAlpha * pulse;
   ctx.lineWidth = Math.max(1, baseW - 1);
   ctx.shadowBlur = 0;
   ctx.strokeStyle = "#ffffff";
@@ -510,6 +686,9 @@ const STRINGS = {
     nodeGlow: "Node glow",
     nodePulse: "Pulse while running",
     titleGradient: "Title gradient",
+    taskBadge: "Task badge",
+    taskProgress: "Task {pct}%",
+    taskQueued: "Task {pct}% · {n} queued",
   },
   zh: {
     button: "流水",
@@ -523,6 +702,9 @@ const STRINGS = {
     nodeGlow: "节点荧光",
     nodePulse: "执行脉冲",
     titleGradient: "标题渐变",
+    taskBadge: "任务角标",
+    taskProgress: "任务 {pct}%",
+    taskQueued: "任务 {pct}% · {n} 排队",
   },
 };
 
@@ -543,11 +725,24 @@ function detectLocale() {
 function buildPanel() {
   if (document.getElementById("muse-flow-btn")) return;
   const t = STRINGS[detectLocale()];
+  // 右下角容器：任务角标在左，流水按钮在右，避免角标挡住按钮
+  const bar = document.createElement("div");
+  bar.id = "muse-flow-bar";
+  bar.style.cssText =
+    "position:fixed;right:12px;bottom:12px;z-index:9999;display:flex;align-items:center;gap:6px;";
+
+  const badge = document.createElement("span");
+  badge.id = "muse-flow-task-badge";
+  badge.style.cssText =
+    "display:none;align-items:center;padding:6px 10px;min-height:30px;box-sizing:border-box;border-radius:16px;border:1px solid rgba(255,255,255,.25);background:rgba(15,23,42,.85);color:#e2e8f0;font-size:12px;white-space:nowrap;pointer-events:none;";
+  taskBadgeEl = badge;
+  taskBadgeLocale = detectLocale();
+
   const btn = document.createElement("button");
   btn.id = "muse-flow-btn";
   btn.textContent = t.button;
   btn.style.cssText =
-    "position:fixed;right:12px;bottom:12px;z-index:9999;padding:6px 12px;border-radius:16px;border:1px solid rgba(255,255,255,.25);background:rgba(15,23,42,.85);color:#e2e8f0;font-size:12px;cursor:pointer;";
+    "padding:6px 12px;border-radius:16px;border:1px solid rgba(255,255,255,.25);background:rgba(15,23,42,.85);color:#e2e8f0;font-size:12px;cursor:pointer;";
   const panel = document.createElement("div");
   panel.style.cssText =
     "position:fixed;right:12px;bottom:48px;z-index:9999;width:220px;padding:12px;border-radius:10px;border:1px solid rgba(255,255,255,.18);background:rgba(15,23,42,.92);color:#e2e8f0;font-size:12px;display:none;";
@@ -568,6 +763,11 @@ function buildPanel() {
     i.onchange = () => {
       cfg[key] = i.checked;
       saveCfg();
+      try {
+        if (key === "taskBadge") updateTaskBadge();
+      } catch (e) {
+        /* ignore */
+      }
     };
     return i;
   };
@@ -598,11 +798,19 @@ function buildPanel() {
   panel.appendChild(row(t.nodeGlow, mkCheck("nodeGlow")));
   panel.appendChild(row(t.nodePulse, mkCheck("nodePulse")));
   panel.appendChild(row(t.titleGradient, mkCheck("titleGradient")));
+  panel.appendChild(row(t.taskBadge, mkCheck("taskBadge")));
   btn.onclick = () => {
     panel.style.display = panel.style.display === "none" ? "block" : "none";
   };
-  document.body.appendChild(btn);
+  bar.appendChild(badge);
+  bar.appendChild(btn);
+  document.body.appendChild(bar);
   document.body.appendChild(panel);
+  try {
+    updateTaskBadge();
+  } catch (e) {
+    /* ignore */
+  }
 }
 
 app.registerExtension({
@@ -659,6 +867,25 @@ app.registerExtension({
       } catch (e) {
         /* overlay errors must never break the canvas */
       }
+
+      // 任务角标随当前节点进度刷新
+      try {
+        updateTaskBadge();
+      } catch (e) {
+        /* badge errors must never break the canvas */
+      }
+
+      // 执行中每 5 秒轮询一次队列，避免频繁请求 /queue
+      try {
+        const frameTime = nowSec();
+        if (executingNodeId != null && frameTime - lastQueuePoll > 5) {
+          lastQueuePoll = frameTime;
+          void refreshQueuedCount();
+        }
+      } catch (e) {
+        /* ignore */
+      }
+
       const c = app.canvas;
       if (c) {
         try {
@@ -669,6 +896,6 @@ app.registerExtension({
       }
     };
     requestAnimationFrame(loop);
-    console.log("[FlowLinks] v0.1.0-beta.1 enabled");
+    console.log("[FlowLinks] v0.2.0 enabled");
   },
 });
