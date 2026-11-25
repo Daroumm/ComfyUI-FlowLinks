@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-11-24
+
+### Added
+
+- Task progress woven into the flow (2026-11-24): the executing node's
+  progress brightens its outgoing links, overall progress boosts the active
+  chain's flow speed and glow, plus an optional "Task 45% · 12 queued"
+  badge next to the Flow button (toggleable in the settings panel).
+
 ### Changed
 
 - Error feedback is now unmissable (2026-11-21): the failed node's glow frame
@@ -15,12 +24,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   flowing. Fresh-install test passed on macOS (ComfyUI 0.45.3): clean install
   from the release files, renamed folder, restart, execution follow verified
   with frame captures.
-
-### Planned
-
-- Task progress woven into the flow: node progress brightens its outgoing
-  links, overall progress boosts the active chain, plus an optional
-  "Task 45% · 12 queued" badge next to the Flow button.
 
 ## [0.1.0-beta.1] - 2026-11-20
 
@@ -40,5 +43,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   self-healing overlay, capped link-state memory, decoupled setup so a link
   takeover failure never disables node glow or the panel.
 
-[Unreleased]: https://github.com/Daroumm/ComfyUI-FlowLinks/compare/v0.1.0-beta.1...HEAD
+[Unreleased]: https://github.com/Daroumm/ComfyUI-FlowLinks/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/Daroumm/ComfyUI-FlowLinks/releases/tag/v0.2.0
 [0.1.0-beta.1]: https://github.com/Daroumm/ComfyUI-FlowLinks/releases/tag/v0.1.0-beta.1

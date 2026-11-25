@@ -5,7 +5,7 @@
 > *A touch of living color for a static interface.*
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-0.1.0--beta.1-blue.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.2.0-blue.svg)](CHANGELOG.md)
 [![ComfyUI](https://img.shields.io/badge/ComfyUI-frontend%20extension-green.svg)](https://github.com/comfyanonymous/ComfyUI)
 
 Animated **water-pipe workflow links** and **per-type neon node glow** for ComfyUI.
@@ -35,8 +35,12 @@ the workflow.
 - **Zero-dependency frontend extension** — pure JavaScript, no Python nodes,
   no models, no pip installs. Works with every node pack, because it hooks
   the link renderer itself.
-- **Settings panel** — nine options (flow on/off, speed, pipe width, glow,
-  bubbles, idle speed, node glow, pulse, title gradient), persisted in
+- **Task progress woven into the flow** — the executing node's progress
+  brightens its outgoing links, overall progress boosts the active chain's
+  speed and glow, and an optional "Task 45% · 12 queued" badge sits next to
+  the Flow button.
+- **Settings panel** — ten options (flow on/off, speed, pipe width, glow,
+  bubbles, idle speed, node glow, pulse, title gradient, task badge), persisted in
   `localStorage`. Panel labels follow the ComfyUI language automatically
   (English / 简体中文).
 
@@ -58,7 +62,7 @@ Restart ComfyUI. The extension activates automatically — no nodes to add.
 
 ### From the release zip
 
-Download `ComfyUI-FlowLinks-v0.1.0-beta.1.zip` from the Releases page, extract
+Download `ComfyUI-FlowLinks-v0.2.0.zip` from the Releases page, extract
 it into `ComfyUI/custom_nodes/`, and restart ComfyUI.
 
 **Uninstall:** delete the `ComfyUI-FlowLinks` folder from `custom_nodes`.
@@ -79,6 +83,7 @@ canvas to open the settings panel:
 | Node glow | on | Neon frame around every node |
 | Pulse while running | on | Breathing pulse on the executing node |
 | Title gradient | on | Matching gradient on node title bars |
+| Task badge | on | "Task X% · N queued" badge next to the Flow button |
 
 ![Settings panel](docs/screenshot-panel.png)
 

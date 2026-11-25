@@ -1,7 +1,7 @@
 [project]
 name = "comfyui-flowlinks"
 description = "Animated water-pipe workflow links and per-type neon node glow for ComfyUI. Flow speed follows live execution progress."
-version = "0.1.0-beta.1"
+version = "0.2.0"
 license = { text = "MIT" }
 requires-python = ">=3.9"
 authors = [{ name = "darou" }]

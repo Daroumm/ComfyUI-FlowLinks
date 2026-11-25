@@ -5,7 +5,7 @@
 > *为平淡的界面，添一抹流动的色彩。*
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-0.1.0--beta.1-blue.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.2.0-blue.svg)](CHANGELOG.md)
 [![ComfyUI](https://img.shields.io/badge/ComfyUI-frontend%20extension-green.svg)](https://github.com/comfyanonymous/ComfyUI)
 
 为 ComfyUI 带来**水管流水式动态连线**和**按节点类型配色的荧光边框**。
@@ -29,8 +29,10 @@
   标题栏带同色渐变。
 - **零依赖前端扩展**——纯 JavaScript，没有 Python 节点、没有模型、不用 pip
   安装。它接管的是连线渲染层本身，所以所有节点包都适用。
-- **设置面板**——9 项设置（流水开关、流速、管径、辉光、气泡、空闲流速、
-  节点荧光、执行脉冲、标题渐变），自动保存到 `localStorage`。面板语言随
+- **任务进度织入水流**——执行中节点的进度让它的出线更亮，总进度推高整条
+  活跃链路的流速和辉光；可选的"任务 45% · 12 排队"角标挂在"流水"按钮旁边。
+- **设置面板**——10 项设置（流水开关、流速、管径、辉光、气泡、空闲流速、
+  节点荧光、执行脉冲、标题渐变、任务角标），自动保存到 `localStorage`。面板语言随
   ComfyUI 语言自动切换（English / 简体中文）。
 
 ## 安装
@@ -50,7 +52,7 @@ git clone https://github.com/Daroumm/ComfyUI-FlowLinks.git
 
 ### 用 Release 压缩包
 
-从 Releases 页面下载 `ComfyUI-FlowLinks-v0.1.0-beta.1.zip`，解压到
+从 Releases 页面下载 `ComfyUI-FlowLinks-v0.2.0.zip`，解压到
 `ComfyUI/custom_nodes/`，重启 ComfyUI。
 
 **卸载：** 把 `custom_nodes` 里的 `ComfyUI-FlowLinks` 文件夹删掉即可。
@@ -70,6 +72,7 @@ git clone https://github.com/Daroumm/ComfyUI-FlowLinks.git
 | 节点荧光 | 开 | 每个节点周围的荧光边框 |
 | 执行脉冲 | 开 | 执行中节点的呼吸脉冲 |
 | 标题渐变 | 开 | 节点标题栏的同色渐变 |
+| 任务角标 | 开 | 「流水」按钮旁的"任务 X% · N 排队"角标 |
 
 ![设置面板](docs/screenshot-panel.png)
 
